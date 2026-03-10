@@ -1,0 +1,5 @@
+-keep class com.google.api.** { *; }
+-keep class com.google.android.gms.** { *; }
+-keep class com.billreminder.app.model.** { *; }
+-dontwarn com.google.api.**
+-dontwarn org.apache.**

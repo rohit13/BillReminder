@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Bill Reminder</string>
+    <string name="sync">Sync Email</string>
+    <string name="sign_out">Sign Out</string>
+    <string name="add_to_calendar">Add to Calendar</string>
+    <string name="set_reminder">Set Reminder</string>
+    <string name="mark_paid">Mark as Paid</string>
+</resources>
