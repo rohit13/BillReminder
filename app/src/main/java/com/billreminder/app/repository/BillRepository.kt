@@ -6,12 +6,15 @@ import androidx.lifecycle.LiveData
 import com.billreminder.app.data.BillDatabase
 import com.billreminder.app.model.Bill
 import com.billreminder.app.model.BillStatus
+import com.billreminder.app.util.EmailParser
 import com.billreminder.app.util.EmailPreFilter
 import com.billreminder.app.util.GeminiValidator
 import com.billreminder.app.util.PreFilterResult
 
 class BillRepository(context: Context) {
-    private val dao = BillDatabase.getInstance(context).billDao()
+    private val db = BillDatabase.getInstance(context)
+    private val dao = db.billDao()
+    private val geminiValidator = GeminiValidator(db.geminiCacheDao())
     private val gmailRepo = GmailRepository(context)
     private val calendarRepo = CalendarRepository(context)
 
@@ -41,9 +44,9 @@ class BillRepository(context: Context) {
                 when (EmailPreFilter.evaluate(bill.senderEmail, bill.subject, parsed.headers)) {
 
                     is PreFilterResult.AutoAccept -> {
-                        // Trusted billing domain, no Gemini needed
+                        // Trusted billing domain — no Gemini needed, confidence sentinel = 1.0
                         Log.d(TAG, "Pre-filter AutoAccept: ${bill.subject}")
-                        dao.insertBill(bill.copy(isRejectedByGemini = false))
+                        dao.insertBill(bill.copy(isRejectedByGemini = false, geminiConfidence = 1.0))
                         newCount++
                     }
 
@@ -53,13 +56,25 @@ class BillRepository(context: Context) {
                     }
 
                     is PreFilterResult.NeedsGemini -> {
-                        // Stage 2 (added in next branch): for now fall through to existing Gemini call
-                        val isRealBill = GeminiValidator.validateIsInvoice(bill.subject, bill.rawEmailSnippet)
-                        if (isRealBill) {
-                            dao.insertBill(bill.copy(isGeminiVerified = true))
+                        // Stage 2: enriched Gemini call with structured JSON + caching
+                        val geminiResult = geminiValidator.validateAndExtract(
+                            emailId = bill.emailId,
+                            subject = bill.subject,
+                            snippet = bill.rawEmailSnippet
+                        )
+
+                        // Receipts and duplicates are hard-rejected regardless of isInvoice
+                        if (geminiResult.isReceipt || geminiResult.isDuplicate) {
+                            Log.d(TAG, "Gemini: receipt/duplicate, skipping: ${bill.subject}")
+                            continue
+                        }
+
+                        if (geminiResult.isInvoice) {
+                            val mergedBill = EmailParser.mergeGeminiExtraction(bill, geminiResult)
+                            dao.insertBill(mergedBill)
                             newCount++
                         } else {
-                            Log.d(TAG, "Gemini rejected email: ${bill.subject}")
+                            Log.d(TAG, "Gemini rejected (confidence=${geminiResult.confidence}): ${bill.subject}")
                         }
                     }
                 }
