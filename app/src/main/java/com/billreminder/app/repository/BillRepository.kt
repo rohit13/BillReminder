@@ -6,7 +6,9 @@ import androidx.lifecycle.LiveData
 import com.billreminder.app.data.BillDatabase
 import com.billreminder.app.model.Bill
 import com.billreminder.app.model.BillStatus
+import com.billreminder.app.util.EmailPreFilter
 import com.billreminder.app.util.GeminiValidator
+import com.billreminder.app.util.PreFilterResult
 
 class BillRepository(context: Context) {
     private val dao = BillDatabase.getInstance(context).billDao()
@@ -26,18 +28,39 @@ class BillRepository(context: Context) {
     suspend fun syncFromGmail(): Result<Int> {
         val result = gmailRepo.fetchBillEmails()
         return if (result.isSuccess) {
-            val bills = result.getOrNull() ?: emptyList()
+            val emailResults = result.getOrNull() ?: emptyList()
             var newCount = 0
-            for (bill in bills) {
-                val existing = dao.getBillByEmailId(bill.emailId)
-                if (existing == null) {
-                    // Gemini Verification: only insert if confirmed as a real bill
-                    val isRealBill = GeminiValidator.validateIsInvoice(bill.subject, bill.rawEmailSnippet)
-                    if (isRealBill) {
-                        dao.insertBill(bill.copy(isGeminiVerified = true))
+
+            for (parsed in emailResults) {
+                val bill = parsed.bill
+
+                // Dedup: skip emails already in the database
+                if (dao.getBillByEmailId(bill.emailId) != null) continue
+
+                // Stage 1: Pre-filter — fast local triage before any Gemini call
+                when (EmailPreFilter.evaluate(bill.senderEmail, bill.subject, parsed.headers)) {
+
+                    is PreFilterResult.AutoAccept -> {
+                        // Trusted billing domain, no Gemini needed
+                        Log.d(TAG, "Pre-filter AutoAccept: ${bill.subject}")
+                        dao.insertBill(bill.copy(isRejectedByGemini = false))
                         newCount++
-                    } else {
-                        Log.d(TAG, "Gemini rejected email, not inserting: ${bill.subject}")
+                    }
+
+                    is PreFilterResult.AutoReject -> {
+                        // Post-payment confirmation or other known non-invoice — discard
+                        Log.d(TAG, "Pre-filter AutoReject: ${bill.subject}")
+                    }
+
+                    is PreFilterResult.NeedsGemini -> {
+                        // Stage 2 (added in next branch): for now fall through to existing Gemini call
+                        val isRealBill = GeminiValidator.validateIsInvoice(bill.subject, bill.rawEmailSnippet)
+                        if (isRealBill) {
+                            dao.insertBill(bill.copy(isGeminiVerified = true))
+                            newCount++
+                        } else {
+                            Log.d(TAG, "Gemini rejected email: ${bill.subject}")
+                        }
                     }
                 }
             }
