@@ -94,8 +94,46 @@ object EmailParser {
             description = extractDescription(subject, senderName),
             category = category,
             status = BillStatus.PENDING,
-            rawEmailSnippet = body.take(500)
+            rawEmailSnippet = body.take(2000)
         )
+    }
+
+    /**
+     * Merges Gemini-extracted fields into a [Bill] that was initially parsed by
+     * regex. Gemini values take precedence when present and valid; regex values
+     * are used as fallbacks.
+     *
+     * Called in Stage 2 after [GeminiValidator.validateAndExtract] returns a
+     * successful [GeminiResult].
+     */
+    fun mergeGeminiExtraction(bill: Bill, result: GeminiResult): Bill {
+        val mergedAmount = result.amount
+            ?.takeIf { it > 0 && it < 100_000 }
+            ?: bill.amount
+
+        val mergedDueDate = result.dueDate
+            ?.let { parseIso8601Date(it) }
+            ?: bill.dueDate
+
+        val mergedProvider = result.provider
+            ?.takeIf { it.isNotBlank() }
+            ?: bill.sender
+
+        return bill.copy(
+            amount = mergedAmount,
+            dueDate = mergedDueDate,
+            sender = mergedProvider,
+            geminiConfidence = result.confidence,
+            isGeminiVerified = result.isInvoice
+        )
+    }
+
+    private fun parseIso8601Date(dateStr: String): Long? {
+        return try {
+            SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(dateStr)?.time
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun extractAmount(text: String): Double? {

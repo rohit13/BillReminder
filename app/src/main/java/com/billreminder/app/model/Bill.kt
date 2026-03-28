@@ -27,7 +27,13 @@ data class Bill(
     val reminderSet: Boolean = false,
     val rawEmailSnippet: String = "",
     val isGeminiVerified: Boolean = false,
-    val isRejectedByGemini: Boolean = false
+    val isRejectedByGemini: Boolean = false,
+    /**
+     * Gemini's confidence score for the isInvoice classification (0.0–1.0).
+     * -1.0 means the email was not evaluated by Gemini (e.g. auto-accepted by
+     * Stage 1 pre-filter or manually added by the user).
+     */
+    val geminiConfidence: Double = -1.0
 ) {
     fun getDueDateAsDate(): Date = Date(dueDate)
     fun getReceivedDateAsDate(): Date = Date(receivedDate)
