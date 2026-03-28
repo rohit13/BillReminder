@@ -5,6 +5,7 @@ import android.util.Base64
 import android.util.Log
 import com.billreminder.app.model.Bill
 import com.billreminder.app.util.EmailParser
+import com.google.api.services.gmail.model.MessagePartHeader
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
@@ -42,13 +43,18 @@ class GmailRepository(private val context: Context) {
             .build()
     }
 
-    suspend fun fetchBillEmails(): Result<List<Bill>> = withContext(Dispatchers.IO) {
+    /**
+     * Fetches bill-candidate emails from Gmail and returns them as [ParsedEmailResult]
+     * objects, each containing the parsed [Bill] and the raw MIME headers needed by
+     * [com.billreminder.app.util.EmailPreFilter] (Stage 1).
+     */
+    suspend fun fetchBillEmails(): Result<List<ParsedEmailResult>> = withContext(Dispatchers.IO) {
         try {
             val gmail = buildGmailService() ?: return@withContext Result.failure(
                 Exception("Not signed in")
             )
 
-            val bills = mutableListOf<Bill>()
+            val results = mutableListOf<ParsedEmailResult>()
             val userId = "me"
 
             // Search for bill-related emails
@@ -80,9 +86,9 @@ class GmailRepository(private val context: Context) {
                                 .setFormat("full")
                                 .execute()
 
-                            val bill = parseMessageToBill(message)
-                            if (bill != null) {
-                                bills.add(bill)
+                            val parsed = parseMessageToResult(message)
+                            if (parsed != null) {
+                                results.add(parsed)
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error fetching message ${msgRef.id}", e)
@@ -94,18 +100,18 @@ class GmailRepository(private val context: Context) {
             }
 
             // Sort by due date
-            bills.sortBy { it.dueDate }
+            results.sortBy { it.bill.dueDate }
 
-            Result.success(bills)
+            Result.success(results)
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching emails", e)
             Result.failure(e)
         }
     }
 
-    private fun parseMessageToBill(message: Message): Bill? {
+    private fun parseMessageToResult(message: Message): ParsedEmailResult? {
         try {
-            val headers = message.payload?.headers ?: return null
+            val headers: List<MessagePartHeader> = message.payload?.headers ?: return null
 
             val subject = headers.find { it.name == "Subject" }?.value ?: ""
             val from = headers.find { it.name == "From" }?.value ?: ""
@@ -116,14 +122,16 @@ class GmailRepository(private val context: Context) {
 
             val body = extractBody(message)
 
-            return EmailParser.parseBillFromEmail(
+            val bill = EmailParser.parseBillFromEmail(
                 emailId = message.id ?: "",
                 subject = subject,
                 body = body,
                 senderName = senderName,
                 senderEmail = senderEmail,
                 receivedTimestamp = receivedDate
-            )
+            ) ?: return null
+
+            return ParsedEmailResult(bill = bill, headers = headers)
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing message", e)
             return null
