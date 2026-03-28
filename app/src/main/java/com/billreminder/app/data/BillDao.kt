@@ -7,23 +7,19 @@ import com.billreminder.app.model.BillStatus
 
 @Dao
 interface BillDao {
-    @Query("SELECT * FROM bills ORDER BY dueDate ASC")
-    fun getAllBills(): LiveData<List<Bill>>
-
-    @Query("SELECT * FROM bills ORDER BY dueDate ASC")
-    suspend fun getAllBillsSync(): List<Bill>
+    @Query("""
+        SELECT * FROM bills 
+        WHERE ((status = 'PAID') OR (dueDate >= :retentionLimit)) 
+        AND isRejectedByGemini = 0
+        ORDER BY dueDate ASC
+    """)
+    fun getAllVisibleBills(retentionLimit: Long): LiveData<List<Bill>>
 
     @Query("SELECT * FROM bills WHERE id = :id")
     suspend fun getBillById(id: Long): Bill?
 
     @Query("SELECT * FROM bills WHERE emailId = :emailId LIMIT 1")
     suspend fun getBillByEmailId(emailId: String): Bill?
-
-    @Query("SELECT * FROM bills WHERE status != 'PAID' ORDER BY dueDate ASC")
-    fun getActiveBills(): LiveData<List<Bill>>
-
-    @Query("SELECT * FROM bills WHERE dueDate BETWEEN :start AND :end ORDER BY dueDate ASC")
-    suspend fun getBillsDueBetween(start: Long, end: Long): List<Bill>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBill(bill: Bill): Long

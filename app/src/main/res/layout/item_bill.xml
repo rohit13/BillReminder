@@ -5,9 +5,9 @@
     android:id="@+id/card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="6dp"
+    android:layout_margin="8dp"
     app:cardCornerRadius="12dp"
-    app:cardElevation="4dp"
+    app:cardElevation="2dp"
     app:cardBackgroundColor="@color/surface">
 
     <LinearLayout
@@ -19,7 +19,8 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -28,117 +29,123 @@
                 android:orientation="vertical">
 
                 <TextView
-                    android:id="@+id/tvTitle"
+                    android:id="@+id/tvServiceProvider"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary"
-                    android:maxLines="2"
-                    android:ellipsize="end"/>
-
-                <TextView
-                    android:id="@+id/tvSender"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_secondary"
-                    android:layout_marginTop="2dp"/>
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="end">
-
-                <TextView
-                    android:id="@+id/tvAmount"
-                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textSize="18sp"
                     android:textStyle="bold"
-                    android:textColor="@color/primary"/>
+                    android:textColor="@color/text_primary"
+                    android:maxLines="1"
+                    android:ellipsize="end"/>
 
                 <TextView
-                    android:id="@+id/tvStatus"
+                    android:id="@+id/tvCategory"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:layout_marginTop="4dp"/>
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginTop="2dp"
+                    android:background="@drawable/bg_chip"
+                    android:paddingHorizontal="6dp"
+                    android:paddingVertical="1dp"/>
 
             </LinearLayout>
 
+            <TextView
+                android:id="@+id/tvAmount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@color/primary"/>
+
         </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#1A000000"
+            android:layout_marginVertical="12dp"/>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="8dp">
+            android:gravity="center_vertical">
 
             <TextView
                 android:id="@+id/tvDueDate"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:textSize="13sp"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium"
                 android:textColor="@color/text_secondary"/>
 
             <TextView
-                android:id="@+id/tvCategory"
+                android:id="@+id/tvStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="11sp"
-                android:textColor="@color/text_hint"
-                android:background="@drawable/bg_chip"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="2dp"/>
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textAllCaps="true"/>
 
         </LinearLayout>
 
-        <LinearLayout
+        <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="12dp"
-            android:gravity="end">
+            android:layout_marginTop="16dp"
+            android:scrollbars="none">
 
-            <Button
-                android:id="@+id/btnCalendar"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="32dp"
-                android:layout_weight="1"
-                android:text="📅 Calendar"
-                android:textSize="11sp"
-                android:layout_marginEnd="4dp"
-                android:paddingHorizontal="4dp"/>
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/btnReminder"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="32dp"
-                android:layout_weight="1"
-                android:text="🔔 Remind"
-                android:textSize="11sp"
-                android:layout_marginEnd="4dp"
-                android:paddingHorizontal="4dp"/>
+                <Button
+                    android:id="@+id/btnCalendar"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="Add to Calendar"
+                    android:textSize="11sp"
+                    android:paddingHorizontal="8dp"
+                    app:icon="@drawable/ic_bill_icon"
+                    app:iconSize="14dp"/>
 
-            <Button
-                android:id="@+id/btnPaid"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="32dp"
-                android:layout_weight="1"
-                android:text="✅ Paid"
-                android:textSize="11sp"
-                android:paddingHorizontal="4dp"/>
+                <Button
+                    android:id="@+id/btnReminder"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="Set Reminder"
+                    android:textSize="11sp"
+                    android:paddingHorizontal="8dp"
+                    app:icon="@drawable/ic_notification"
+                    app:iconSize="14dp"/>
 
-        </LinearLayout>
+                <Button
+                    android:id="@+id/btnViewMail"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="View Email"
+                    android:textSize="11sp"
+                    android:paddingHorizontal="8dp"/>
+
+                <Button
+                    android:id="@+id/btnPaid"
+                    style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="Mark Done"
+                    android:textSize="11sp"
+                    android:layout_marginStart="8dp"
+                    android:paddingHorizontal="12dp"/>
+
+            </LinearLayout>
+        </HorizontalScrollView>
 
     </LinearLayout>
 

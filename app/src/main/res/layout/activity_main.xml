@@ -8,7 +8,9 @@
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:elevation="0dp"
+        app:elevation="0dp">
 
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/toolbar"
@@ -17,6 +19,55 @@
             android:background="@color/primary"
             android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
             app:title="Bill Reminder"/>
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/filterChipGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:background="@color/primary"
+            app:singleSelection="true"
+            app:selectionRequired="true">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipAll"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="All"
+                android:checked="true"
+                app:chipBackgroundColor="@color/surface"
+                app:chipSurfaceColor="@color/surface"/>
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipDue"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Due"
+                app:chipBackgroundColor="@color/surface"
+                app:chipSurfaceColor="@color/surface"/>
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipPaid"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Paid"
+                app:chipBackgroundColor="@color/surface"
+                app:chipSurfaceColor="@color/surface"/>
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipOverdue"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Overdue"
+                app:chipBackgroundColor="@color/surface"
+                app:chipSurfaceColor="@color/surface"/>
+
+        </com.google.android.material.chip.ChipGroup>
 
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -31,9 +82,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="12dp"
-            android:background="@color/surface"
+            android:background="#0D000000"
             android:textColor="@color/text_secondary"
-            android:textSize="14sp"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
             android:text="Loading bills..."/>
 
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -50,7 +102,7 @@
                     android:id="@+id/recyclerView"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:padding="8dp"
+                    android:padding="4dp"
                     android:clipToPadding="false"/>
 
                 <LinearLayout
@@ -59,30 +111,32 @@
                     android:layout_height="match_parent"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:visibility="gone">
+                    android:visibility="gone"
+                    android:padding="32dp">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="📭"
-                        android:textSize="64sp"/>
+                        android:textSize="80sp"/>
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="No bills found"
-                        android:textSize="18sp"
+                        android:text="No bills here"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_primary"
+                        android:layout_marginTop="24dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Pull down to sync from Gmail or add one manually using the + button."
+                        android:textSize="15sp"
                         android:textColor="@color/text_secondary"
-                        android:layout_marginTop="16dp"/>
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Pull down to sync from Gmail\nor tap + to add manually"
-                        android:textSize="14sp"
-                        android:textColor="@color/text_hint"
                         android:gravity="center"
-                        android:layout_marginTop="8dp"/>
+                        android:layout_marginTop="12dp"/>
 
                 </LinearLayout>
 
@@ -97,9 +151,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_margin="16dp"
+        android:layout_margin="24dp"
         android:src="@android:drawable/ic_input_add"
         app:backgroundTint="@color/primary"
+        app:tint="@android:color/white"
         android:contentDescription="Add bill"/>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

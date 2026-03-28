@@ -1,10 +1,7 @@
 package com.billreminder.app.viewmodel
 
 import android.app.Application
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.*
 import com.billreminder.app.model.Bill
 import com.billreminder.app.model.BillStatus
 import com.billreminder.app.repository.BillRepository
@@ -17,17 +14,39 @@ sealed class UiState {
     data class Error(val message: String) : UiState()
 }
 
+enum class BillFilter {
+    ALL, DUE, PAID, OVERDUE
+}
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = BillRepository(application)
 
-    val allBills = repository.allBills
-    val activeBills = repository.activeBills
+    private val _filter = MutableLiveData(BillFilter.ALL)
+    val filter: LiveData<BillFilter> = _filter
+
+    private val visibleBills: LiveData<List<Bill>> = repository.getVisibleBills()
+
+    val filteredBills: LiveData<List<Bill>> = _filter.switchMap { currentFilter ->
+        visibleBills.map { bills ->
+            when (currentFilter) {
+                BillFilter.ALL -> bills
+                BillFilter.DUE -> bills.filter { it.status != BillStatus.PAID && !it.isOverdue() }
+                BillFilter.PAID -> bills.filter { it.status == BillStatus.PAID }
+                BillFilter.OVERDUE -> bills.filter { it.isOverdue() }
+                else -> bills
+            }
+        }
+    }
 
     private val _uiState = MutableLiveData<UiState>(UiState.Idle)
     val uiState: LiveData<UiState> = _uiState
 
     private val _syncProgress = MutableLiveData<Boolean>(false)
     val syncProgress: LiveData<Boolean> = _syncProgress
+
+    fun setFilter(filter: BillFilter) {
+        _filter.value = filter
+    }
 
     fun syncEmails() {
         viewModelScope.launch {

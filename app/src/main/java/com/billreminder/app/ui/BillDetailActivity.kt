@@ -2,6 +2,7 @@ package com.billreminder.app.ui
 
 import android.os.Bundle
 import android.view.MenuItem
+import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -38,6 +39,17 @@ class BillDetailActivity : AppCompatActivity() {
 
         val billId = intent.getLongExtra(EXTRA_BILL_ID, -1)
         if (billId == -1L) { finish(); return }
+
+        // Setup WebView
+        binding.wvDetailEmail.webViewClient = WebViewClient()
+        binding.wvDetailEmail.settings.apply {
+            javaScriptEnabled = false // Keep it simple and secure
+            loadWithOverviewMode = true
+            useWideViewPort = true
+            setSupportZoom(true)
+            builtInZoomControls = true
+            displayZoomControls = false
+        }
 
         loadBill(billId)
 
@@ -76,7 +88,20 @@ class BillDetailActivity : AppCompatActivity() {
         binding.tvDetailReceived.text = "Received: ${dateFormat.format(bill.getReceivedDateAsDate())}"
         binding.tvDetailCategory.text = "Category: ${bill.category}"
         binding.tvDetailStatus.text = "Status: ${bill.getComputedStatus().name}"
-        binding.tvDetailSnippet.text = bill.rawEmailSnippet
+        
+        // Render HTML content in WebView
+        val htmlContent = if (bill.rawEmailSnippet.contains("<html>", ignoreCase = true) || 
+                             bill.rawEmailSnippet.contains("<body>", ignoreCase = true)) {
+            bill.rawEmailSnippet
+        } else {
+            // Wrap plain text in basic HTML for better rendering in WebView
+            "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>" +
+            "<body style=\"font-family: sans-serif; padding: 8px; line-height: 1.5; color: #444;\">" +
+            bill.rawEmailSnippet.replace("\n", "<br>") +
+            "</body></html>"
+        }
+        
+        binding.wvDetailEmail.loadDataWithBaseURL(null, htmlContent, "text/html", "utf-8", null)
 
         binding.btnDetailCalendar.text = if (bill.calendarEventId != null) "✅ Added to Calendar" else "📅 Add to Google Calendar"
         binding.btnDetailCalendar.isEnabled = bill.calendarEventId == null

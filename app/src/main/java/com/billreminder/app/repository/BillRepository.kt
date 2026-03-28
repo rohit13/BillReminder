@@ -1,17 +1,27 @@
 package com.billreminder.app.repository
 
 import android.content.Context
+import android.util.Log
+import androidx.lifecycle.LiveData
 import com.billreminder.app.data.BillDatabase
 import com.billreminder.app.model.Bill
 import com.billreminder.app.model.BillStatus
+import com.billreminder.app.util.GeminiValidator
 
 class BillRepository(context: Context) {
     private val dao = BillDatabase.getInstance(context).billDao()
     private val gmailRepo = GmailRepository(context)
     private val calendarRepo = CalendarRepository(context)
 
-    val allBills = dao.getAllBills()
-    val activeBills = dao.getActiveBills()
+    companion object {
+        private const val TAG = "BillRepository"
+    }
+
+    fun getVisibleBills(): LiveData<List<Bill>> {
+        // Retention Policy: Exclude bills overdue for more than 15 days
+        val fifteenDaysAgo = System.currentTimeMillis() - (15L * 24 * 60 * 60 * 1000)
+        return dao.getAllVisibleBills(fifteenDaysAgo)
+    }
 
     suspend fun syncFromGmail(): Result<Int> {
         val result = gmailRepo.fetchBillEmails()
@@ -21,8 +31,14 @@ class BillRepository(context: Context) {
             for (bill in bills) {
                 val existing = dao.getBillByEmailId(bill.emailId)
                 if (existing == null) {
-                    dao.insertBill(bill)
-                    newCount++
+                    // Gemini Verification: only insert if confirmed as a real bill
+                    val isRealBill = GeminiValidator.validateIsInvoice(bill.subject, bill.rawEmailSnippet)
+                    if (isRealBill) {
+                        dao.insertBill(bill.copy(isGeminiVerified = true))
+                        newCount++
+                    } else {
+                        Log.d(TAG, "Gemini rejected email, not inserting: ${bill.subject}")
+                    }
                 }
             }
             Result.success(newCount)

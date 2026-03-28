@@ -12,6 +12,7 @@ import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.gmail.Gmail
 import com.google.api.services.gmail.GmailScopes
 import com.google.api.services.gmail.model.Message
+import com.google.api.services.gmail.model.MessagePart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -20,7 +21,6 @@ class GmailRepository(private val context: Context) {
     companion object {
         private const val TAG = "GmailRepository"
         private const val APP_NAME = "BillReminder"
-        private const val MAX_EMAILS = 100
     }
 
     private fun buildGmailService(): Gmail? {
@@ -131,32 +131,14 @@ class GmailRepository(private val context: Context) {
     }
 
     private fun extractBody(message: Message): String {
-        val parts = message.payload?.parts
-        if (parts != null) {
-            for (part in parts) {
-                if (part.mimeType == "text/plain") {
-                    val data = part.body?.data ?: continue
-                    return decodeBase64(data)
-                }
-            }
-            for (part in parts) {
-                if (part.mimeType == "text/html") {
-                    val data = part.body?.data ?: continue
-                    return stripHtml(decodeBase64(data))
-                }
-                // Handle nested parts
-                if (part.parts != null) {
-                    for (subPart in part.parts) {
-                        if (subPart.mimeType == "text/plain") {
-                            val data = subPart.body?.data ?: continue
-                            return decodeBase64(data)
-                        }
-                    }
-                }
-            }
-        }
+        // Try to find HTML first for better preview, then fallback to plain text
+        val htmlBody = findPart(message.payload, "text/html")
+        if (htmlBody != null) return htmlBody
 
-        // Try direct body
+        val plainBody = findPart(message.payload, "text/plain")
+        if (plainBody != null) return plainBody
+
+        // Try direct body if no parts
         val bodyData = message.payload?.body?.data
         if (bodyData != null) {
             return decodeBase64(bodyData)
@@ -165,18 +147,30 @@ class GmailRepository(private val context: Context) {
         return message.snippet ?: ""
     }
 
+    private fun findPart(part: MessagePart?, mimeType: String): String? {
+        if (part == null) return null
+        
+        if (part.mimeType == mimeType) {
+            val data = part.body?.data
+            if (data != null) return decodeBase64(data)
+        }
+
+        if (part.parts != null) {
+            for (subPart in part.parts) {
+                val found = findPart(subPart, mimeType)
+                if (found != null) return found
+            }
+        }
+        
+        return null
+    }
+
     private fun decodeBase64(data: String): String {
         return try {
             String(Base64.decode(data, Base64.URL_SAFE), Charsets.UTF_8)
         } catch (e: Exception) {
             ""
         }
-    }
-
-    private fun stripHtml(html: String): String {
-        return html.replace(Regex("<[^>]*>"), " ")
-            .replace(Regex("\\s+"), " ")
-            .trim()
     }
 
     private fun parseSender(from: String): Pair<String, String> {

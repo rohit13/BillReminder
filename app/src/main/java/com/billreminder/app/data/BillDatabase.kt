@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.billreminder.app.model.Bill
 
-@Database(entities = [Bill::class], version = 1, exportSchema = false)
+@Database(entities = [Bill::class], version = 2, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class BillDatabase : RoomDatabase() {
     abstract fun billDao(): BillDao
@@ -21,7 +21,10 @@ abstract class BillDatabase : RoomDatabase() {
                     context.applicationContext,
                     BillDatabase::class.java,
                     "bill_reminder_db"
-                ).build().also { INSTANCE = it }
+                )
+                .fallbackToDestructiveMigration()
+                .build()
+                .also { INSTANCE = it }
             }
         }
     }

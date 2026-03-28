@@ -25,6 +25,7 @@ import com.billreminder.app.model.Bill
 import com.billreminder.app.model.BillStatus
 import com.billreminder.app.repository.BillRepository
 import com.billreminder.app.util.ReminderScheduler
+import com.billreminder.app.viewmodel.BillFilter
 import com.billreminder.app.viewmodel.MainViewModel
 import com.billreminder.app.viewmodel.UiState
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -49,6 +50,7 @@ class MainActivity : AppCompatActivity(), BillAdapter.BillClickListener {
 
         repository = BillRepository(this)
         setupRecyclerView()
+        setupFilters()
         observeViewModel()
         requestPermissionsIfNeeded()
 
@@ -72,13 +74,33 @@ class MainActivity : AppCompatActivity(), BillAdapter.BillClickListener {
         binding.recyclerView.adapter = adapter
     }
 
+    private fun setupFilters() {
+        binding.filterChipGroup.setOnCheckedStateChangeListener { group, checkedIds ->
+            val filter = when (checkedIds.firstOrNull()) {
+                R.id.chipDue -> BillFilter.DUE
+                R.id.chipPaid -> BillFilter.PAID
+                R.id.chipOverdue -> BillFilter.OVERDUE
+                else -> BillFilter.ALL
+            }
+            viewModel.setFilter(filter)
+        }
+    }
+
     private fun observeViewModel() {
-        viewModel.allBills.observe(this) { bills ->
+        viewModel.filteredBills.observe(this) { bills ->
             adapter.submitList(bills)
             binding.emptyView.visibility = if (bills.isEmpty()) View.VISIBLE else View.GONE
-            val pending = bills.count { it.status != BillStatus.PAID }
+            
+            val pending = bills.count { it.status != BillStatus.PAID && !it.isOverdue() }
             val overdue = bills.count { it.isOverdue() }
-            binding.tvSummary.text = "$pending pending bills, $overdue overdue"
+            val paid = bills.count { it.status == BillStatus.PAID }
+            
+            binding.tvSummary.text = when(viewModel.filter.value) {
+                BillFilter.PAID -> "$paid paid bills"
+                BillFilter.OVERDUE -> "$overdue overdue bills"
+                BillFilter.DUE -> "$pending due bills"
+                else -> "$pending due, $overdue overdue"
+            }
         }
 
         viewModel.uiState.observe(this) { state ->
@@ -120,7 +142,7 @@ class MainActivity : AppCompatActivity(), BillAdapter.BillClickListener {
     override fun onMarkAsPaid(bill: Bill) {
         AlertDialog.Builder(this)
             .setTitle("Mark as Paid")
-            .setMessage("Mark '${bill.description}' as paid?")
+            .setMessage("Mark this bill as paid?")
             .setPositiveButton("Yes") { _, _ -> viewModel.markAsPaid(bill) }
             .setNegativeButton("Cancel", null)
             .show()
@@ -163,7 +185,7 @@ class MainActivity : AppCompatActivity(), BillAdapter.BillClickListener {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(AlarmManager::class.java)
-            if (!alarmManager.canScheduleExactAlarms()) {
+            if (alarmManager != null && !alarmManager.canScheduleExactAlarms()) {
                 AlertDialog.Builder(this)
                     .setTitle("Enable Exact Alarms")
                     .setMessage("To set bill reminders, please allow exact alarms in settings.")

@@ -4,6 +4,12 @@ plugins {
     id 'kotlin-kapt'
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+
 android {
     namespace "com.billreminder.app"
     compileSdk 34
@@ -15,11 +21,14 @@ android {
         versionCode 1
         versionName "1.0"
         multiDexEnabled true
+
+        buildConfigField "String", "GEMINI_API_KEY", "\"${localProperties.getProperty('gemini.api.key') ?: ""}\""
     }
 
     buildTypes {
         release {
             minifyEnabled false
+
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
@@ -39,6 +48,7 @@ android {
     buildFeatures {
         viewBinding true
         dataBinding true
+        buildConfig true
     }
 
     packagingOptions {
@@ -96,4 +106,7 @@ dependencies {
 
     // SwipeRefreshLayout
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+
+    // Gemini AI
+    implementation 'com.google.ai.client.generativeai:generativeai:0.9.0'
 }

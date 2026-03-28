@@ -25,7 +25,9 @@ data class Bill(
     val status: BillStatus = BillStatus.PENDING,
     val calendarEventId: String? = null,
     val reminderSet: Boolean = false,
-    val rawEmailSnippet: String = ""
+    val rawEmailSnippet: String = "",
+    val isGeminiVerified: Boolean = false,
+    val isRejectedByGemini: Boolean = false
 ) {
     fun getDueDateAsDate(): Date = Date(dueDate)
     fun getReceivedDateAsDate(): Date = Date(receivedDate)
