@@ -80,6 +80,7 @@ class MainActivity : AppCompatActivity(), BillAdapter.BillClickListener {
                 R.id.chipDue -> BillFilter.DUE
                 R.id.chipPaid -> BillFilter.PAID
                 R.id.chipOverdue -> BillFilter.OVERDUE
+                R.id.chipReview -> BillFilter.NEEDS_REVIEW
                 else -> BillFilter.ALL
             }
             viewModel.setFilter(filter)
@@ -95,11 +96,13 @@ class MainActivity : AppCompatActivity(), BillAdapter.BillClickListener {
             val overdue = bills.count { it.isOverdue() }
             val paid = bills.count { it.status == BillStatus.PAID }
             
+            val review = bills.count { it.status == BillStatus.NEEDS_REVIEW }
             binding.tvSummary.text = when(viewModel.filter.value) {
                 BillFilter.PAID -> "$paid paid bills"
                 BillFilter.OVERDUE -> "$overdue overdue bills"
                 BillFilter.DUE -> "$pending due bills"
-                else -> "$pending due, $overdue overdue"
+                BillFilter.NEEDS_REVIEW -> "$review bills need your review"
+                else -> "$pending due, $overdue overdue" + if (review > 0) ", $review to review" else ""
             }
         }
 
@@ -144,6 +147,19 @@ class MainActivity : AppCompatActivity(), BillAdapter.BillClickListener {
             .setTitle("Mark as Paid")
             .setMessage("Mark this bill as paid?")
             .setPositiveButton("Yes") { _, _ -> viewModel.markAsPaid(bill) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    override fun onConfirmBill(bill: Bill) {
+        viewModel.confirmBill(bill)
+    }
+
+    override fun onDismissBill(bill: Bill) {
+        AlertDialog.Builder(this)
+            .setTitle("Dismiss Bill")
+            .setMessage("This email will not appear again. Continue?")
+            .setPositiveButton("Dismiss") { _, _ -> viewModel.dismissBill(bill) }
             .setNegativeButton("Cancel", null)
             .show()
     }

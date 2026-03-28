@@ -5,7 +5,9 @@ import androidx.room.PrimaryKey
 import java.util.Date
 
 enum class BillStatus {
-    PENDING, DUE_SOON, OVERDUE, PAID
+    PENDING, DUE_SOON, OVERDUE, PAID,
+    /** Gemini confidence was 0.60–0.84; awaiting user confirmation before treating as a real bill. */
+    NEEDS_REVIEW
 }
 
 @Entity(tableName = "bills")
@@ -51,6 +53,8 @@ data class Bill(
     fun getComputedStatus(): BillStatus {
         return when {
             status == BillStatus.PAID -> BillStatus.PAID
+            // Pin NEEDS_REVIEW — don't auto-transition to OVERDUE while awaiting user confirmation
+            status == BillStatus.NEEDS_REVIEW -> BillStatus.NEEDS_REVIEW
             isOverdue() -> BillStatus.OVERDUE
             isDueSoon() -> BillStatus.DUE_SOON
             else -> BillStatus.PENDING

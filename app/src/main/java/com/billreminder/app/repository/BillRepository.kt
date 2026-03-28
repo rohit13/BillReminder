@@ -71,10 +71,24 @@ class BillRepository(context: Context) {
 
                         if (geminiResult.isInvoice) {
                             val mergedBill = EmailParser.mergeGeminiExtraction(bill, geminiResult)
-                            dao.insertBill(mergedBill)
-                            newCount++
+                            // Stage 3: confidence thresholding
+                            val insertStatus = when {
+                                geminiResult.confidence >= 0.85 -> BillStatus.PENDING
+                                geminiResult.confidence >= 0.60 -> BillStatus.NEEDS_REVIEW
+                                else -> null // too uncertain — store as rejected for dedup
+                            }
+                            if (insertStatus != null) {
+                                dao.insertBill(mergedBill.copy(status = insertStatus))
+                                newCount++
+                            } else {
+                                // Confidence < 0.60: cached by GeminiCache, store row for dedup
+                                Log.d(TAG, "Low confidence (${geminiResult.confidence}), rejected: ${bill.subject}")
+                                dao.insertBill(mergedBill.copy(isRejectedByGemini = true))
+                            }
                         } else {
-                            Log.d(TAG, "Gemini rejected (confidence=${geminiResult.confidence}): ${bill.subject}")
+                            Log.d(TAG, "Gemini non-invoice (confidence=${geminiResult.confidence}): ${bill.subject}")
+                            // Store rejected row so dedup check works on next sync
+                            dao.insertBill(bill.copy(isRejectedByGemini = true, geminiConfidence = geminiResult.confidence))
                         }
                     }
                 }
@@ -100,6 +114,15 @@ class BillRepository(context: Context) {
         bill.calendarEventId?.let { eventId ->
             calendarRepo.deleteCalendarEvent(eventId)
         }
+    }
+
+    /** Promotes a NEEDS_REVIEW bill to PENDING after user confirmation. */
+    suspend fun confirmBill(bill: Bill) = dao.confirmBill(bill.id)
+
+    /** Dismisses a NEEDS_REVIEW bill — marks it rejected and removes calendar event if any. */
+    suspend fun dismissBill(bill: Bill) {
+        dao.dismissBill(bill.id)
+        bill.calendarEventId?.let { calendarRepo.deleteCalendarEvent(it) }
     }
 
     suspend fun insertBill(bill: Bill) = dao.insertBill(bill)

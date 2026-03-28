@@ -15,7 +15,7 @@ sealed class UiState {
 }
 
 enum class BillFilter {
-    ALL, DUE, PAID, OVERDUE
+    ALL, DUE, PAID, OVERDUE, NEEDS_REVIEW
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -30,10 +30,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         visibleBills.map { bills ->
             when (currentFilter) {
                 BillFilter.ALL -> bills
-                BillFilter.DUE -> bills.filter { it.status != BillStatus.PAID && !it.isOverdue() }
+                BillFilter.DUE -> bills.filter { it.status != BillStatus.PAID && it.status != BillStatus.NEEDS_REVIEW && !it.isOverdue() }
                 BillFilter.PAID -> bills.filter { it.status == BillStatus.PAID }
                 BillFilter.OVERDUE -> bills.filter { it.isOverdue() }
-                else -> bills
+                BillFilter.NEEDS_REVIEW -> bills.filter { it.status == BillStatus.NEEDS_REVIEW }
             }
         }
     }
@@ -92,6 +92,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.insertBill(bill)
             _uiState.value = UiState.Success("Bill added!")
+        }
+    }
+
+    fun confirmBill(bill: Bill) {
+        viewModelScope.launch {
+            repository.confirmBill(bill)
+            _uiState.value = UiState.Success("Bill confirmed!")
+        }
+    }
+
+    fun dismissBill(bill: Bill) {
+        viewModelScope.launch {
+            repository.dismissBill(bill)
+            _uiState.value = UiState.Success("Bill dismissed.")
         }
     }
 

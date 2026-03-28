@@ -44,4 +44,12 @@ interface BillDao {
 
     @Query("DELETE FROM bills WHERE emailId = :emailId")
     suspend fun deleteBillByEmailId(emailId: String)
+
+    /** Promotes a NEEDS_REVIEW bill to PENDING and marks it Gemini-verified. */
+    @Query("UPDATE bills SET status = 'PENDING', isGeminiVerified = 1 WHERE id = :id")
+    suspend fun confirmBill(id: Long)
+
+    /** Dismisses a NEEDS_REVIEW bill — hides it from all views. */
+    @Query("UPDATE bills SET isRejectedByGemini = 1 WHERE id = :id")
+    suspend fun dismissBill(id: Long)
 }
