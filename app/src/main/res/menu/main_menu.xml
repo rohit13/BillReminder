@@ -9,6 +9,11 @@
         app:showAsAction="ifRoom"/>
 
     <item
+        android:id="@+id/action_reset_resync"
+        android:title="Reset &amp; Resync"
+        app:showAsAction="never"/>
+
+    <item
         android:id="@+id/action_sign_out"
         android:title="Sign Out"
         app:showAsAction="never"/>

@@ -57,10 +57,15 @@ class GeminiValidator(private val cacheDao: GeminiCacheDao) {
 
         // API call
         val result = callGeminiApi(subject, snippet)
-        Log.d(TAG, "Gemini result for '$subject': isInvoice=${result.isInvoice}, confidence=${result.confidence}")
+        Log.d(TAG, "Gemini result for '$subject': isInvoice=${result.isInvoice}, confidence=${result.confidence}, reason=${result.reason}")
 
-        // Persist — cache both accepted and rejected so they are never re-evaluated
-        cacheDao.insert(result.toGeminiCache(emailId))
+        // Only cache definitive results — do NOT cache parse errors or API failures.
+        // Transient errors should be retried on the next sync, not permanently rejected.
+        if (result.reason != "parse_error") {
+            cacheDao.insert(result.toGeminiCache(emailId))
+        } else {
+            Log.w(TAG, "Skipping cache for parse_error on emailId=$emailId — will retry next sync")
+        }
 
         return result
     }
@@ -114,15 +119,17 @@ class GeminiValidator(private val cacheDao: GeminiCacheDao) {
     }
 
     private fun parseGeminiJson(text: String): GeminiResult {
-        // Strip accidental markdown fences (```json ... ```)
-        val cleaned = text
-            .removePrefix("```json")
-            .removePrefix("```")
-            .removeSuffix("```")
-            .trim()
+        // Extract the first JSON object from the response.
+        // Gemini sometimes wraps the JSON in markdown fences (```json\n...\n```) or
+        // adds explanatory text before/after the JSON. Using a regex to find the
+        // outermost { } block is more robust than relying on prefix/suffix stripping.
+        val jsonString = extractJsonObject(text) ?: run {
+            Log.e(TAG, "No JSON object found in Gemini response: $text")
+            return GeminiResult.UNKNOWN
+        }
 
         return try {
-            val parsed = Gson().fromJson(cleaned, GeminiJsonResponse::class.java)
+            val parsed = Gson().fromJson(jsonString, GeminiJsonResponse::class.java)
             GeminiResult(
                 isInvoice = parsed.isInvoice,
                 isReceipt = parsed.isReceipt,
@@ -134,9 +141,38 @@ class GeminiValidator(private val cacheDao: GeminiCacheDao) {
                 reason = parsed.reason
             )
         } catch (e: Exception) {
-            Log.e(TAG, "JSON parse error: $cleaned", e)
+            Log.e(TAG, "JSON parse error. Input was: $jsonString", e)
             GeminiResult.UNKNOWN
         }
+    }
+
+    /**
+     * Finds and returns the first balanced JSON object `{...}` in [text].
+     * Handles nested objects by tracking brace depth.
+     * Returns null if no valid JSON object is found.
+     */
+    private fun extractJsonObject(text: String): String? {
+        val start = text.indexOf('{')
+        if (start == -1) return null
+
+        var depth = 0
+        var inString = false
+        var escape = false
+
+        for (i in start until text.length) {
+            val c = text[i]
+            when {
+                escape -> escape = false
+                c == '\\' && inString -> escape = true
+                c == '"' -> inString = !inString
+                !inString && c == '{' -> depth++
+                !inString && c == '}' -> {
+                    depth--
+                    if (depth == 0) return text.substring(start, i + 1)
+                }
+            }
+        }
+        return null
     }
 
     /** Typed POJO for Gson deserialization — avoids Boolean/String ambiguity from Map parsing. */

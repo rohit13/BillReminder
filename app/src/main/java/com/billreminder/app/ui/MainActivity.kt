@@ -172,9 +172,19 @@ class MainActivity : AppCompatActivity(), BillAdapter.BillClickListener {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_sync -> { viewModel.syncEmails(); true }
+            R.id.action_reset_resync -> { showResetDialog(); true }
             R.id.action_sign_out -> { showSignOutDialog(); true }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    private fun showResetDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Reset & Resync")
+            .setMessage("This will delete all local bills and the AI classification cache, then re-fetch from Gmail. Use this if emails are incorrectly classified.\n\nContinue?")
+            .setPositiveButton("Reset") { _, _ -> viewModel.resetAndResync() }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showSignOutDialog() {
