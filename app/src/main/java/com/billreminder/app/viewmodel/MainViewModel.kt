@@ -95,6 +95,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun resetAndResync() {
+        viewModelScope.launch {
+            _uiState.value = UiState.Loading
+            val result = repository.resetAndResync()
+            _uiState.value = if (result.isSuccess) {
+                val count = result.getOrNull() ?: 0
+                UiState.Success("Reset complete. Found $count new bills.")
+            } else {
+                UiState.Error("Reset failed: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
     fun confirmBill(bill: Bill) {
         viewModelScope.launch {
             repository.confirmBill(bill)

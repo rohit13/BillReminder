@@ -63,6 +63,13 @@ class BillRepository(context: Context) {
                             snippet = bill.rawEmailSnippet
                         )
 
+                        // If Gemini returned a parse/API error, skip this email entirely.
+                        // It is NOT cached, so it will be retried on the next sync.
+                        if (geminiResult.reason == "parse_error") {
+                            Log.w(TAG, "Gemini parse error for '${bill.subject}' — will retry next sync")
+                            continue
+                        }
+
                         // Receipts and duplicates are hard-rejected regardless of isInvoice
                         if (geminiResult.isReceipt || geminiResult.isDuplicate) {
                             Log.d(TAG, "Gemini: receipt/duplicate, skipping: ${bill.subject}")
@@ -81,13 +88,14 @@ class BillRepository(context: Context) {
                                 dao.insertBill(mergedBill.copy(status = insertStatus))
                                 newCount++
                             } else {
-                                // Confidence < 0.60: cached by GeminiCache, store row for dedup
+                                // Confidence < 0.60: Gemini is sure it exists but unsure it's an
+                                // invoice — store as rejected so dedup works on next sync.
                                 Log.d(TAG, "Low confidence (${geminiResult.confidence}), rejected: ${bill.subject}")
                                 dao.insertBill(mergedBill.copy(isRejectedByGemini = true))
                             }
                         } else {
                             Log.d(TAG, "Gemini non-invoice (confidence=${geminiResult.confidence}): ${bill.subject}")
-                            // Store rejected row so dedup check works on next sync
+                            // Store rejected row so dedup check prevents re-evaluation next sync
                             dao.insertBill(bill.copy(isRejectedByGemini = true, geminiConfidence = geminiResult.confidence))
                         }
                     }
@@ -114,6 +122,20 @@ class BillRepository(context: Context) {
         bill.calendarEventId?.let { eventId ->
             calendarRepo.deleteCalendarEvent(eventId)
         }
+    }
+
+    /**
+     * Clears ALL bills and the Gemini cache, then re-syncs from Gmail.
+     *
+     * Use this when email classification has gone wrong (e.g. all emails were
+     * rejected due to a bad API key or a parsing bug). Clearing just the bills
+     * table without clearing the Gemini cache will NOT help — the cache will
+     * immediately re-reject the same emails.
+     */
+    suspend fun resetAndResync(): Result<Int> {
+        dao.deleteAllBills()
+        db.geminiCacheDao().clearAll()
+        return syncFromGmail()
     }
 
     /** Promotes a NEEDS_REVIEW bill to PENDING after user confirmation. */

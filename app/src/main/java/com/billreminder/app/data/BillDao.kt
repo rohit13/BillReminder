@@ -45,6 +45,10 @@ interface BillDao {
     @Query("DELETE FROM bills WHERE emailId = :emailId")
     suspend fun deleteBillByEmailId(emailId: String)
 
+    /** Deletes every row — used by resetAndResync() together with clearing the Gemini cache. */
+    @Query("DELETE FROM bills")
+    suspend fun deleteAllBills()
+
     /** Promotes a NEEDS_REVIEW bill to PENDING and marks it Gemini-verified. */
     @Query("UPDATE bills SET status = 'PENDING', isGeminiVerified = 1 WHERE id = :id")
     suspend fun confirmBill(id: Long)

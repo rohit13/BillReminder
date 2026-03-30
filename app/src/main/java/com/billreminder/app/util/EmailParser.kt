@@ -76,11 +76,15 @@ object EmailParser {
         senderEmail: String,
         receivedTimestamp: Long
     ): Bill? {
-        if (!isBillEmail(subject, body, senderEmail)) return null
+        // Strip HTML to plain text before any processing — the body may be raw HTML
+        // from Gmail's text/html MIME part. Sending HTML to Gemini produces noise.
+        val plainBody = htmlToPlainText(body)
 
-        val amount = extractAmount(body) ?: extractAmount(subject) ?: 0.0
-        val dueDate = extractDueDate(body) ?: extractDueDate(subject) ?: estimateDueDate(receivedTimestamp)
-        val category = detectCategory(subject, body, senderEmail)
+        if (!isBillEmail(subject, plainBody, senderEmail)) return null
+
+        val amount = extractAmount(plainBody) ?: extractAmount(subject) ?: 0.0
+        val dueDate = extractDueDate(plainBody) ?: extractDueDate(subject) ?: estimateDueDate(receivedTimestamp)
+        val category = detectCategory(subject, plainBody, senderEmail)
 
         return Bill(
             emailId = emailId,
@@ -94,8 +98,43 @@ object EmailParser {
             description = extractDescription(subject, senderName),
             category = category,
             status = BillStatus.PENDING,
-            rawEmailSnippet = body.take(2000)
+            rawEmailSnippet = plainBody.take(2000)  // clean text, not HTML
         )
+    }
+
+    /**
+     * Converts an HTML email body to readable plain text.
+     *
+     * Removes <style> and <script> blocks entirely (they contain no useful text),
+     * strips all remaining HTML tags, decodes common HTML entities, and collapses
+     * whitespace. The result is what a human would read in a plain-text email client.
+     */
+    fun htmlToPlainText(html: String): String {
+        // Quick check — if it doesn't look like HTML, return as-is
+        if (!html.contains('<')) return html
+
+        return html
+            // Remove style blocks (CSS noise)
+            .replace(Regex("<style[^>]*>[\\s\\S]*?</style>", RegexOption.IGNORE_CASE), "")
+            // Remove script blocks
+            .replace(Regex("<script[^>]*>[\\s\\S]*?</script>", RegexOption.IGNORE_CASE), "")
+            // Replace block-level tags with newlines to preserve sentence boundaries
+            .replace(Regex("</(p|div|tr|li|h[1-6]|br)>", RegexOption.IGNORE_CASE), "\n")
+            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+            // Strip all remaining tags
+            .replace(Regex("<[^>]+>"), "")
+            // Decode common HTML entities
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&apos;", "'")
+            // Collapse whitespace
+            .replace(Regex("[ \\t]+"), " ")
+            .replace(Regex("\\n{3,}"), "\n\n")
+            .trim()
     }
 
     /**
