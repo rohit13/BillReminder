@@ -103,12 +103,19 @@ class GeminiValidator(private val cacheDao: GeminiCacheDao) {
                         .build()
                     httpClient.newCall(request).execute().use { response ->
                         val body = response.body?.string().orEmpty()
-                        if (!response.isSuccessful) {
-                            Log.e(TAG, "Gemini HTTP ${response.code} on attempt ${attempt + 1} for '$subject': $body")
-                            lastError = "HTTP ${response.code}"
-                            null // will trigger retry
-                        } else {
-                            parseApiResponse(body, subject)
+                        when {
+                            response.isSuccessful -> parseApiResponse(body, subject)
+                            response.code in 400..499 && response.code != 429 -> {
+                                // 4xx errors (except rate-limit) are permanent — don't retry
+                                Log.e(TAG, "Gemini HTTP ${response.code} (permanent) for '$subject': $body")
+                                return GeminiResult.API_ERROR
+                            }
+                            else -> {
+                                // 5xx or 429 — transient, allow retry
+                                Log.e(TAG, "Gemini HTTP ${response.code} on attempt ${attempt + 1} for '$subject': $body")
+                                lastError = "HTTP ${response.code}"
+                                null
+                            }
                         }
                     }
                 }

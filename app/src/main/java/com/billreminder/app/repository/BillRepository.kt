@@ -64,9 +64,10 @@ class BillRepository(context: Context) {
                         )
 
                         // If Gemini returned a parse/API error, skip this email entirely.
-                        // It is NOT cached, so it will be retried on the next sync.
-                        if (geminiResult.reason == "parse_error") {
-                            Log.w(TAG, "Gemini parse error for '${bill.subject}' — will retry next sync")
+                        // It is NOT cached and NOT stored in the DB, so the next sync will
+                        // re-evaluate it. Storing it as rejected would block future retries.
+                        if (geminiResult.reason == "parse_error" || geminiResult.reason == "api_error") {
+                            Log.w(TAG, "Gemini ${geminiResult.reason} for '${bill.subject}' — will retry next sync")
                             continue
                         }
 
