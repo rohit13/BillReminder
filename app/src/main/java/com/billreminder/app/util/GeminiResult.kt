@@ -21,10 +21,10 @@ data class GeminiResult(
 ) {
     companion object {
         /**
-         * Returned on API errors or JSON parse failures — represents "we don't know".
+         * Returned on JSON parse failures — the API responded but the output was unusable.
          * confidence=0.0 ensures Stage 3 rejects it quietly.
          */
-        val UNKNOWN = GeminiResult(
+        val PARSE_ERROR = GeminiResult(
             isInvoice = false,
             isReceipt = false,
             isDuplicate = false,
@@ -34,5 +34,23 @@ data class GeminiResult(
             confidence = 0.0,
             reason = "parse_error"
         )
+
+        /**
+         * Returned on network/API call failures — the request never completed.
+         * confidence=0.0 ensures Stage 3 rejects it quietly.
+         */
+        val API_ERROR = GeminiResult(
+            isInvoice = false,
+            isReceipt = false,
+            isDuplicate = false,
+            provider = null,
+            amount = null,
+            dueDate = null,
+            confidence = 0.0,
+            reason = "api_error"
+        )
+
+        /** @deprecated Use [PARSE_ERROR] or [API_ERROR] instead. */
+        val UNKNOWN get() = API_ERROR
     }
 }

@@ -7,6 +7,7 @@ import com.billreminder.app.data.GeminiCacheDao
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
+import kotlinx.coroutines.delay
 
 /**
  * Stage 2 of the bill identification pipeline.
@@ -61,10 +62,10 @@ class GeminiValidator(private val cacheDao: GeminiCacheDao) {
 
         // Only cache definitive results — do NOT cache parse errors or API failures.
         // Transient errors should be retried on the next sync, not permanently rejected.
-        if (result.reason != "parse_error") {
+        if (result.reason != "parse_error" && result.reason != "api_error") {
             cacheDao.insert(result.toGeminiCache(emailId))
         } else {
-            Log.w(TAG, "Skipping cache for parse_error on emailId=$emailId — will retry next sync")
+            Log.w(TAG, "Skipping cache for ${result.reason} on emailId=$emailId — will retry next sync")
         }
 
         return result
@@ -108,14 +109,28 @@ class GeminiValidator(private val cacheDao: GeminiCacheDao) {
             Snippet: $snippet
         """.trimIndent()
 
-        return try {
-            val response = generativeModel.generateContent(prompt)
-            val text = response.text?.trim() ?: return GeminiResult.UNKNOWN
-            parseGeminiJson(text)
-        } catch (e: Exception) {
-            Log.e(TAG, "Gemini API error for '$subject'", e)
-            GeminiResult.UNKNOWN
+        var lastException: Exception? = null
+        repeat(MAX_RETRIES) { attempt ->
+            if (attempt > 0) {
+                val backoffMs = RETRY_BACKOFF_MS * (1L shl (attempt - 1)) // 2s, 4s
+                Log.w(TAG, "Retrying Gemini API call (attempt ${attempt + 1}/$MAX_RETRIES) after ${backoffMs}ms for '$subject'")
+                delay(backoffMs)
+            }
+            try {
+                val response = generativeModel.generateContent(prompt)
+                val text = response.text?.trim()
+                if (text.isNullOrEmpty()) {
+                    Log.e(TAG, "Gemini returned empty/null response text for '$subject' (attempt ${attempt + 1})")
+                    return GeminiResult.PARSE_ERROR
+                }
+                return parseGeminiJson(text)
+            } catch (e: Exception) {
+                Log.e(TAG, "Gemini API error (attempt ${attempt + 1}/$MAX_RETRIES) for '$subject': ${e.javaClass.simpleName}: ${e.message}", e)
+                lastException = e
+            }
         }
+        Log.e(TAG, "All $MAX_RETRIES Gemini API attempts failed for '$subject'", lastException)
+        return GeminiResult.API_ERROR
     }
 
     private fun parseGeminiJson(text: String): GeminiResult {
@@ -125,7 +140,7 @@ class GeminiValidator(private val cacheDao: GeminiCacheDao) {
         // outermost { } block is more robust than relying on prefix/suffix stripping.
         val jsonString = extractJsonObject(text) ?: run {
             Log.e(TAG, "No JSON object found in Gemini response: $text")
-            return GeminiResult.UNKNOWN
+            return GeminiResult.PARSE_ERROR
         }
 
         return try {
@@ -142,7 +157,7 @@ class GeminiValidator(private val cacheDao: GeminiCacheDao) {
             )
         } catch (e: Exception) {
             Log.e(TAG, "JSON parse error. Input was: $jsonString", e)
-            GeminiResult.UNKNOWN
+            GeminiResult.PARSE_ERROR
         }
     }
 
@@ -190,6 +205,8 @@ class GeminiValidator(private val cacheDao: GeminiCacheDao) {
     companion object {
         private const val TAG = "GeminiValidator"
         private val ISO_DATE_REGEX = Regex("""\d{4}-\d{2}-\d{2}""")
+        private const val MAX_RETRIES = 3
+        private const val RETRY_BACKOFF_MS = 2_000L
     }
 }
 
