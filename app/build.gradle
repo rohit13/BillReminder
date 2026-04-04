@@ -107,6 +107,6 @@ dependencies {
     // SwipeRefreshLayout
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
 
-    // Gemini AI
-    implementation 'com.google.ai.client.generativeai:generativeai:0.9.0'
+    // OkHttp for Gemini REST API (replaces deprecated generativeai SDK)
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
