@@ -17,7 +17,7 @@ import com.google.api.services.gmail.model.MessagePart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class GmailRepository(private val context: Context) {
+open class GmailRepository(private val context: Context) {
 
     companion object {
         private const val TAG = "GmailRepository"
@@ -48,7 +48,7 @@ class GmailRepository(private val context: Context) {
      * objects, each containing the parsed [Bill] and the raw MIME headers needed by
      * [com.billreminder.app.util.EmailPreFilter] (Stage 1).
      */
-    suspend fun fetchBillEmails(): Result<List<ParsedEmailResult>> = withContext(Dispatchers.IO) {
+    open suspend fun fetchBillEmails(): Result<List<ParsedEmailResult>> = withContext(Dispatchers.IO) {
         try {
             val gmail = buildGmailService() ?: return@withContext Result.failure(
                 Exception("Not signed in")

@@ -25,7 +25,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * Results are persisted in [GeminiCacheDao] so subsequent syncs never re-call the
  * API for an already-evaluated email — including rejected ones.
  */
-class GeminiValidator(private val cacheDao: GeminiCacheDao) {
+open class GeminiValidator(private val cacheDao: GeminiCacheDao) {
 
     private val httpClient by lazy { OkHttpClient() }
     private val gson = Gson()
@@ -41,7 +41,7 @@ class GeminiValidator(private val cacheDao: GeminiCacheDao) {
      * [GeminiResult.PARSE_ERROR] on JSON parse failures so Stage 3 rejects the
      * email without crashing. Neither is cached so the next sync retries.
      */
-    suspend fun validateAndExtract(
+    open suspend fun validateAndExtract(
         emailId: String,
         subject: String,
         snippet: String

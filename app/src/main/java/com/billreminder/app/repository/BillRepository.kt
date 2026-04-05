@@ -11,12 +11,37 @@ import com.billreminder.app.util.EmailPreFilter
 import com.billreminder.app.util.GeminiValidator
 import com.billreminder.app.util.PreFilterResult
 
-class BillRepository(context: Context) {
-    private val db = BillDatabase.getInstance(context)
-    private val dao = db.billDao()
-    private val geminiValidator = GeminiValidator(db.geminiCacheDao())
-    private val gmailRepo = GmailRepository(context)
-    private val calendarRepo = CalendarRepository(context)
+class BillRepository {
+    private val db: BillDatabase?
+    private val dao: BillDao
+    private val geminiValidator: GeminiValidator
+    private val gmailRepo: GmailRepository
+    private val calendarRepo: CalendarRepository?
+
+    constructor(context: Context) {
+        db = BillDatabase.getInstance(context)
+        dao = db.billDao()
+        geminiValidator = GeminiValidator(db.geminiCacheDao())
+        gmailRepo = GmailRepository(context)
+        calendarRepo = CalendarRepository(context)
+    }
+
+    /**
+     * Test-only constructor. Bypasses all Android/Room dependencies so
+     * [syncFromGmail] can be exercised in plain JVM unit tests.
+     * Do NOT call [resetAndResync] or [addToCalendar] from this path.
+     */
+    internal constructor(
+        dao: BillDao,
+        geminiValidator: GeminiValidator,
+        gmailRepo: GmailRepository
+    ) {
+        db = null
+        this.dao = dao
+        this.geminiValidator = geminiValidator
+        this.gmailRepo = gmailRepo
+        calendarRepo = null
+    }
 
     companion object {
         private const val TAG = "BillRepository"
@@ -135,7 +160,7 @@ class BillRepository(context: Context) {
      */
     suspend fun resetAndResync(): Result<Int> {
         dao.deleteAllBills()
-        db.geminiCacheDao().clearAll()
+        db?.geminiCacheDao()?.clearAll()
         return syncFromGmail()
     }
 
