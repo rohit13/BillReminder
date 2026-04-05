@@ -25,9 +25,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * Results are persisted in [GeminiCacheDao] so subsequent syncs never re-call the
  * API for an already-evaluated email — including rejected ones.
  */
-open class GeminiValidator(private val cacheDao: GeminiCacheDao) {
-
-    private val httpClient by lazy { OkHttpClient() }
+open class GeminiValidator(
+    private val cacheDao: GeminiCacheDao,
+    /** Injectable for testing; defaults to the build-time key in production. */
+    internal val apiKey: String = BuildConfig.GEMINI_API_KEY,
+    /** Injectable for testing; defaults to a plain OkHttpClient in production. */
+    private val httpClient: OkHttpClient = OkHttpClient()
+) {
     private val gson = Gson()
 
     /**
@@ -46,7 +50,7 @@ open class GeminiValidator(private val cacheDao: GeminiCacheDao) {
         subject: String,
         snippet: String
     ): GeminiResult {
-        if (BuildConfig.GEMINI_API_KEY.isBlank()) {
+        if (apiKey.isBlank()) {
             Log.e(TAG, "Gemini API key missing — skipping validation")
             return GeminiResult.API_ERROR
         }
@@ -98,7 +102,7 @@ open class GeminiValidator(private val cacheDao: GeminiCacheDao) {
             try {
                 val result = withContext(Dispatchers.IO) {
                     val request = Request.Builder()
-                        .url("$BASE_URL/$MODEL:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
+                        .url("$BASE_URL/$MODEL:generateContent?key=$apiKey")
                         .post(requestBodyJson.toRequestBody(JSON_MEDIA_TYPE))
                         .build()
                     httpClient.newCall(request).execute().use { response ->
