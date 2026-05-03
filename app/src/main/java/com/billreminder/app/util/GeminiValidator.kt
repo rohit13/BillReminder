@@ -13,6 +13,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.UnknownHostException
 
 /**
  * Stage 2 of the bill identification pipeline.
@@ -124,12 +125,25 @@ open class GeminiValidator(
                     }
                 }
                 if (result != null) return result
+            } catch (e: UnknownHostException) {
+                // DNS resolution failed — this rarely self-heals within seconds.
+                // Allow one retry (covers genuine transient DNS blips), then abort
+                // immediately rather than burning 4 more seconds on a hopeless attempt.
+                Log.e(TAG, "Gemini DNS failure (attempt ${attempt + 1}/$MAX_RETRIES) for '$subject': " +
+                    "Cannot resolve '${e.message}'. " +
+                    "Check Settings → Network & internet → Private DNS on the device, " +
+                    "or verify the domain is not blocked on your network.", e)
+                lastError = "DNS: ${e.message}"
+                if (attempt >= 1) {
+                    Log.e(TAG, "Aborting Gemini retries after persistent DNS failure for '$subject'")
+                    return GeminiResult.API_ERROR
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Gemini network error (attempt ${attempt + 1}/$MAX_RETRIES) for '$subject': ${e.javaClass.simpleName}: ${e.message}", e)
                 lastError = "${e.javaClass.simpleName}: ${e.message}"
             }
         }
-        Log.e(TAG, "All $MAX_RETRIES Gemini attempts failed for '$subject': $lastError")
+        Log.e(TAG, "All Gemini attempts failed for '$subject': $lastError")
         return GeminiResult.API_ERROR
     }
 

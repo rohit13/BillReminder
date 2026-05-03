@@ -62,14 +62,17 @@ class GeminiValidatorTest {
     }
 
     /**
-     * REGRESSION: The validator must retry MAX_RETRIES (3) times before giving up.
-     * Each retry triggers a new DNS lookup, so [AlwaysFailingDns.lookupCount] == 3
-     * proves all attempts were made.
+     * DNS failures abort after exactly 2 attempts (not the full MAX_RETRIES=3).
      *
-     * Previously the validator had no retry logic and gave up after 1 attempt.
+     * UnknownHostException rarely self-heals in 2-4 seconds — retrying a third time
+     * just wastes ~4 seconds per email. The validator allows one retry to cover
+     * genuine transient DNS blips, then aborts immediately on the second failure.
+     *
+     * Each attempt triggers one DNS lookup, so lookupCount == 2 proves the early abort.
+     * If lookupCount == 3 the bug is present (full retry cycle was not short-circuited).
      */
     @Test
-    fun `UnknownHostException retries exactly MAX_RETRIES times`() = runTest {
+    fun `UnknownHostException aborts after 2 attempts not full MAX_RETRIES`() = runTest {
         val failingDns = AlwaysFailingDns()
         val validator = validatorWithDns(failingDns)
 
@@ -80,9 +83,10 @@ class GeminiValidatorTest {
         )
 
         assertEquals(
-            "Validator must attempt the request MAX_RETRIES (3) times before giving up. " +
-            "Each attempt triggers a DNS lookup, so lookupCount must equal 3.",
-            3,
+            "DNS failures must abort after 2 attempts (1 retry), not the full MAX_RETRIES=3. " +
+            "A third attempt wastes 4+ extra seconds on a failure that won't self-heal. " +
+            "lookupCount == 3 means the early abort is missing.",
+            2,
             failingDns.lookupCount
         )
     }
