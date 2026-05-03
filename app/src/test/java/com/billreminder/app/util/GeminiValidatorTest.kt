@@ -2,10 +2,12 @@ package com.billreminder.app.util
 
 import com.billreminder.app.data.GeminiCache
 import com.billreminder.app.data.GeminiCacheDao
+import com.billreminder.app.util.GeminiValidator.FallbackDns
 import kotlinx.coroutines.test.runTest
 import okhttp3.Dns
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.InetAddress
 import java.net.UnknownHostException
@@ -160,6 +162,48 @@ class GeminiValidatorTest {
         assertEquals(0, failingDns.lookupCount) // no network call made
         assertEquals(true, result.isInvoice)
         assertEquals(0.92, result.confidence, 0.001)
+    }
+
+    /**
+     * Root cause test: FallbackDns tries system DNS first; when it throws
+     * UnknownHostException (stale negative cache / ISP blocking), it automatically
+     * falls back to the secondary resolver without surfacing the error to the caller.
+     *
+     * This is the exact fix for UnknownHostException on Pixel 9 Pro / Android 14+
+     * where InetAddress.getAllByName() returns a cached NXDOMAIN from a prior failed
+     * lookup, while HttpURLConnection (used by Gmail API) transparently retries.
+     */
+    @Test
+    fun `FallbackDns uses secondary when primary throws UnknownHostException`() {
+        val fallbackAddress = InetAddress.getByName("142.250.80.46") // example IP
+        var fallbackWasCalled = false
+
+        val primary = Dns { throw UnknownHostException("Simulated stale negative cache") }
+        val secondary = Dns { fallbackWasCalled = true; listOf(fallbackAddress) }
+        val dns = FallbackDns(primary = primary, fallback = secondary)
+
+        val result = dns.lookup("generativelanguage.googleapis.com")
+
+        assertTrue("Fallback DNS must be called when system DNS fails", fallbackWasCalled)
+        assertEquals(listOf(fallbackAddress), result)
+    }
+
+    /**
+     * FallbackDns must NOT call the secondary when primary succeeds.
+     */
+    @Test
+    fun `FallbackDns uses primary when it succeeds`() {
+        val primaryAddress = InetAddress.getByName("172.217.0.1")
+        var fallbackWasCalled = false
+
+        val primary = Dns { listOf(primaryAddress) }
+        val secondary = Dns { fallbackWasCalled = true; emptyList() }
+        val dns = FallbackDns(primary = primary, fallback = secondary)
+
+        val result = dns.lookup("generativelanguage.googleapis.com")
+
+        assertTrue("Fallback DNS must NOT be called when system DNS succeeds", !fallbackWasCalled)
+        assertEquals(listOf(primaryAddress), result)
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

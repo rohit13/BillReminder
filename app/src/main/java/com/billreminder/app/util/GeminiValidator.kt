@@ -9,10 +9,14 @@ import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import okhttp3.Dns
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.dnsoverhttps.DnsOverHttps
+import java.net.InetAddress
 import java.net.UnknownHostException
 
 /**
@@ -30,8 +34,8 @@ open class GeminiValidator(
     private val cacheDao: GeminiCacheDao,
     /** Injectable for testing; defaults to the build-time key in production. */
     internal val apiKey: String = BuildConfig.GEMINI_API_KEY,
-    /** Injectable for testing; defaults to a plain OkHttpClient in production. */
-    private val httpClient: OkHttpClient = OkHttpClient()
+    /** Injectable for testing; defaults to DoH-backed client in production. */
+    private val httpClient: OkHttpClient = buildDefaultHttpClient()
 ) {
     private val gson = Gson()
 
@@ -298,6 +302,62 @@ open class GeminiValidator(
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private const val MAX_RETRIES = 3
         private const val RETRY_BACKOFF_MS = 2_000L
+
+        /**
+         * Production default: system DNS first, Google DoH (8.8.8.8) as fallback.
+         *
+         * Root cause of UnknownHostException on Pixel 9 Pro / Android 14+:
+         *   Android's negative DNS cache stores a failed lookup result and serves
+         *   it from cache on every subsequent call — even after the real DNS server
+         *   would now succeed. ISP/carrier DNS servers are also slow to propagate
+         *   newer Google AI domains like generativelanguage.googleapis.com.
+         *
+         * HttpURLConnection (used by the Gmail API) goes through Android's libcore
+         *   network stack which has transparent retry logic. OkHttpClient with Dns.SYSTEM
+         *   calls InetAddress.getAllByName() which hits the stale negative cache.
+         *
+         * Fix: fall back to DoH via Google's public DNS (8.8.8.8/8.8.4.4) when
+         *   system DNS fails. Bootstrap IPs are hardcoded so the DoH connection itself
+         *   needs no DNS lookup — bypassing both the negative cache and ISP filtering.
+         */
+        internal fun buildDefaultHttpClient(): OkHttpClient {
+            val bootstrapClient = OkHttpClient()
+            val googleDoH = DnsOverHttps.Builder()
+                .client(bootstrapClient)
+                .url("https://dns.google/dns-query".toHttpUrl())
+                .bootstrapDnsHosts(
+                    InetAddress.getByName("8.8.8.8"),
+                    InetAddress.getByName("8.8.4.4")
+                )
+                .includeIPv6(false)
+                .build()
+
+            return OkHttpClient.Builder()
+                .dns(FallbackDns(primary = Dns.SYSTEM, fallback = googleDoH))
+                .build()
+        }
+
+        /**
+         * Tries [primary] DNS first. On [UnknownHostException] falls back to [fallback].
+         * Logs which path was taken so it's visible in logcat.
+         */
+        internal class FallbackDns(
+            private val primary: Dns,
+            private val fallback: Dns
+        ) : Dns {
+            override fun lookup(hostname: String): List<InetAddress> {
+                return try {
+                    primary.lookup(hostname).also {
+                        Log.d(TAG, "DNS resolved '$hostname' via system DNS: $it")
+                    }
+                } catch (e: UnknownHostException) {
+                    Log.w(TAG, "System DNS failed for '$hostname', falling back to Google DoH (8.8.8.8)")
+                    fallback.lookup(hostname).also {
+                        Log.d(TAG, "DNS resolved '$hostname' via Google DoH: $it")
+                    }
+                }
+            }
+        }
     }
 }
 
